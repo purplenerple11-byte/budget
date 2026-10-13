@@ -1,0 +1,6 @@
+# Public repo: code only. Never commit exports, statements or snapshots.
+*.csv
+*.pdf
+*.json
+!manifest.json
+.DS_Store

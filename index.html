@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#121316">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <title>Budget</title>
+  <style>
+    :root {
+      --bg: #121316; --surface: #1e1f24; --surface2: #2a2b32; --border: #33353d;
+      --text: #f4f4f5; --dim: #a1a1aa; --action: #cc785c; --green: #22c55e;
+      --wage: #4a4b55; --over: #e5534b;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--bg); }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100dvh; -webkit-tap-highlight-color: transparent;
+      padding: calc(18px + env(safe-area-inset-top)) 16px 110px;
+      max-width: 620px; margin: 0 auto; overflow-x: hidden;
+    }
+    button { font-family: inherit; color: inherit; cursor: pointer; }
+    [hidden] { display: none !important; }
+
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .top h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+    .stamp { margin-left: auto; font-size: 11px; color: var(--dim); text-align: right; }
+    .stamp.busy { color: var(--action); }
+    .stamp.bad { color: var(--over); }
+    .icon-btn {
+      border: none; background: var(--surface); border-radius: 9px; width: 34px; height: 34px;
+      display: grid; place-items: center; color: var(--dim);
+    }
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    .monthbar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+    .monthbar h2 { font-size: 15px; font-weight: 500; flex: 1; text-align: center; }
+    .monthbar button { border: none; background: none; color: var(--dim); font-size: 22px; padding: 2px 12px; line-height: 1; }
+    .monthbar button:disabled { opacity: .25; }
+
+    .cards { display: flex; gap: 8px; margin-bottom: 10px; }
+    .card { flex: 1; background: var(--surface); border-radius: 10px; padding: 11px 13px; min-width: 0; }
+    .card .k { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+    .card .v { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+    .card .v.neg { color: var(--over); }
+    .card .s { font-size: 11px; color: var(--dim); margin-top: 3px; }
+
+    .hh {
+      display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 10px;
+      padding: 10px 13px; margin-bottom: 16px; font-size: 12.5px; color: var(--dim);
+    }
+    .hh b { color: var(--text); font-weight: 500; }
+    .hh .ok { margin-left: auto; color: var(--green); white-space: nowrap; }
+    .hh .no { margin-left: auto; color: var(--action); white-space: nowrap; }
+
+    .chart { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 120px; margin-top: 6px; }
+    .chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; height: 100%;
+                  border: none; background: none; padding: 0; }
+    .chart .bar { background: var(--wage); border-radius: 4px; min-height: 2px; transition: height .3s ease, background .2s; }
+    .chart .col.on .bar { background: var(--action); }
+    .chart .val { font-size: 10px; color: var(--dim); text-align: center; margin-bottom: 3px; white-space: nowrap; }
+    .chart .col.on .val { color: var(--text); }
+    .chart .line { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(244,244,245,.28); pointer-events: none; }
+    .chart .line span { position: absolute; right: 0; top: -14px; font-size: 9.5px; color: var(--dim); }
+    .xlab { display: flex; gap: 6px; font-size: 10px; color: var(--dim); margin: 6px 0 18px; }
+    .xlab div { flex: 1; text-align: center; }
+    .xlab div.on { color: var(--text); }
+
+    .seg { display: flex; background: var(--surface); border-radius: 9px; padding: 3px; margin-bottom: 8px; }
+    .seg button { flex: 1; border: none; background: transparent; color: var(--dim);
+                  border-radius: 7px; padding: 8px 4px; font-size: 13px; }
+    .seg button[aria-pressed="true"] { background: var(--action); color: #fff; }
+    .badge { display: inline-block; min-width: 17px; padding: 0 5px; margin-left: 4px; border-radius: 9px;
+             font-size: 11px; line-height: 17px; background: var(--action); color: #fff; }
+    .seg button[aria-pressed="true"] .badge { background: rgba(255,255,255,.25); }
+
+    /* Category rows */
+    .cat { padding: 13px 2px 12px; border-bottom: 0.5px solid var(--border); }
+    .cat-head { display: flex; align-items: baseline; gap: 8px; }
+    .cat-name { font-size: 14px; flex: 1; border: none; background: none; text-align: left; padding: 0; }
+    .cat-amt { font-size: 13px; color: var(--dim); white-space: nowrap; display: flex; align-items: baseline; gap: 4px; }
+    .cat-amt .sp { color: var(--text); }
+    .cat-amt .sp.over { color: var(--over); }
+    .lim {
+      border: none; background: var(--surface2); color: var(--dim); border-radius: 6px;
+      padding: 3px 8px; font-size: 13px; min-width: 52px; text-align: right;
+    }
+    .lim-in {
+      width: 78px; background: var(--bg); color: var(--text); border: 1px solid var(--action);
+      border-radius: 6px; padding: 3px 8px; font-size: 16px; font-family: inherit; text-align: right;
+      outline: none; box-shadow: 0 0 0 3px rgba(204,120,92,.22);
+    }
+    .meter { height: 4px; background: var(--surface2); border-radius: 3px; margin-top: 9px; overflow: hidden; }
+    .meter i { display: block; height: 100%; background: var(--action); border-radius: 3px; transition: width .3s ease; }
+    .meter i.over { background: var(--over); }
+    .cat-sub { font-size: 11px; color: var(--dim); margin-top: 6px; }
+    .cat-list { margin-top: 8px; }
+
+    /* Transaction rows (Log It's .row) */
+    .row {
+      display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 2px; text-align: left;
+      background: none; border: 0; border-bottom: 0.5px solid var(--border);
+    }
+    .row.mini { padding: 9px 0; }
+    .row .d { font-size: 13.5px; display: block; }
+    .row .m { font-size: 11px; color: var(--dim); margin-top: 3px; display: block; }
+    .row .amt { margin-left: auto; text-align: right; white-space: nowrap; font-size: 14px; }
+    .row .amt.in { color: var(--green); }
+    .row .amt.ref { color: var(--green); }
+    .row.skip { opacity: .45; }
+    .row.unsorted .m { color: var(--action); }
+
+    .detail { padding: 4px 2px 14px; border-bottom: 0.5px solid var(--border); }
+    .detail .full { font-size: 11.5px; color: var(--dim); line-height: 1.45; margin-bottom: 10px; word-break: break-word; }
+    .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+    .chip {
+      border: none; background: var(--surface2); color: var(--dim); border-radius: 999px;
+      padding: 8px 13px; font-size: 13px;
+    }
+    .chip[aria-pressed="true"] { background: var(--action); color: #fff; }
+    .chip.skip { border: 0.5px dashed var(--border); background: transparent; }
+    .always { display: flex; align-items: center; gap: 8px; margin-top: 11px; font-size: 12px; color: var(--dim); }
+    .always input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--action); }
+    .always input[type=text] {
+      flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 0.5px solid var(--border);
+      border-radius: 7px; padding: 6px 8px; font-size: 16px; font-family: inherit; text-transform: uppercase;
+    }
+    .always input[type=text]:focus { outline: none; border-color: var(--action); }
+    .danger {
+      margin-top: 12px; border: 0.5px solid var(--action); background: transparent; color: var(--action);
+      border-radius: 8px; padding: 6px 12px; font-size: 12px;
+    }
+
+    .sort-item { padding: 12px 2px 14px; border-bottom: 0.5px solid var(--border); }
+    .sort-item .top-line { display: flex; gap: 10px; margin-bottom: 10px; }
+    .sort-item .d { font-size: 13.5px; }
+    .sort-item .m { font-size: 11px; color: var(--dim); margin-top: 3px; }
+    .sort-item .amt { margin-left: auto; font-size: 14px; white-space: nowrap; }
+
+    .msg { padding: 28px 4px; text-align: center; font-size: 13px; color: var(--dim); line-height: 1.5; }
+    .skeleton { height: 14px; border-radius: 4px; background: var(--surface); margin: 12px auto; }
+
+    .fab {
+      position: fixed; right: max(18px, calc(50vw - 292px)); bottom: calc(22px + env(safe-area-inset-bottom));
+      width: 58px; height: 58px; border-radius: 50%; border: none; background: var(--action); color: #fff;
+      font-size: 30px; line-height: 1; box-shadow: 0 6px 20px rgba(0,0,0,.45); z-index: 20;
+    }
+
+    /* Dialogs: pinned near the top so the phone keyboard can never push or cover them. */
+    .dlg-wrap {
+      position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.62);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: calc(10vh + env(safe-area-inset-top)) 16px 16px; animation: fade 140ms ease-out;
+    }
+    @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+    .dlg {
+      background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px;
+      padding: 16px; width: 100%; max-width: 400px; max-height: 80vh; overflow-y: auto;
+    }
+    .dlg-t { font-size: 15px; margin-bottom: 12px; }
+    .dlg .seg { background: var(--bg); }
+    .big-amt { display: flex; align-items: center; gap: 4px; margin: 6px 0 14px; }
+    .big-amt span { font-size: 30px; color: var(--dim); }
+    .big-amt input {
+      flex: 1; min-width: 0; background: none; border: none; color: var(--text); outline: none;
+      font-size: 34px; font-weight: 500; letter-spacing: -0.02em; font-family: inherit;
+    }
+    .field {
+      width: 100%; background: var(--bg); border: 0.5px solid var(--border); color: var(--text);
+      border-radius: 9px; padding: 11px 12px; font-size: 16px; font-family: inherit; margin-top: 10px;
+      color-scheme: dark;
+    }
+    .field:focus { outline: none; border-color: var(--action); }
+    .dlg-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .dlg-row button { border: none; border-radius: 9px; padding: 10px 16px; font-size: 14px; }
+    .dlg-c { background: var(--surface2); color: var(--dim); }
+    .dlg-ok { background: var(--action); color: #fff; }
+    .dlg-ok:disabled { opacity: .4; }
+    .dlg .note { font-size: 12px; color: var(--dim); line-height: 1.5; margin-top: 10px; }
+    .dlg .err { font-size: 12.5px; color: var(--over); margin-top: 10px; }
+    .file-btn {
+      display: block; width: 100%; margin-top: 12px; padding: 14px; border-radius: 10px; text-align: center;
+      border: 1px dashed var(--border); color: var(--text); font-size: 14px; background: var(--bg);
+    }
+
+    .gate { padding: 18px 0; }
+    .gate p { font-size: 13px; color: var(--dim); line-height: 1.5; margin-bottom: 12px; }
+    .gate .dlg-ok { width: 100%; border: none; border-radius: 9px; padding: 12px; font-size: 14px; margin-top: 10px; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+      background: var(--surface2); color: var(--text); font-size: 13px; padding: 10px 14px; border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.45); z-index: 70; max-width: calc(100vw - 32px); animation: fade 140ms;
+    }
+    .toast.bad { color: #fff; background: #8d3a2a; }
+
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>Budget</h1>
+    <span class="stamp" id="stamp"></span>
+    <button class="icon-btn" id="import-btn" aria-label="Import a CSV">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+    </button>
+  </div>
+
+  <div id="gate" class="gate" hidden>
+    <p>This device needs your budget key. Open the setup link once, or paste the key here. It's stored on this phone only.</p>
+    <input id="key-in" class="field" type="password" autocomplete="off" placeholder="Budget key">
+    <button class="dlg-ok" id="key-save">Unlock</button>
+  </div>
+
+  <div id="boot" class="msg">
+    <div class="skeleton" style="width:60%"></div>
+    <div class="skeleton" style="width:85%"></div>
+    <div class="skeleton" style="width:70%"></div>
+  </div>
+
+  <main id="app" hidden></main>
+
+  <button class="fab" id="fab" aria-label="Add" hidden>+</button>
+
+  <script src="model.js?v=20261013b"></script>
+  <script src="app.js?v=20261013b"></script>
+</body>
+</html>
