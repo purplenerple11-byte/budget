@@ -50,13 +50,18 @@
     .card .v.neg { color: var(--over); }
     .card .s { font-size: 11px; color: var(--dim); margin-top: 3px; }
 
-    .hh {
-      display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 10px;
-      padding: 10px 13px; margin-bottom: 16px; font-size: 12.5px; color: var(--dim);
+    .house {
+      display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 10px;
+      padding: 11px 13px; margin-bottom: 16px;
     }
-    .hh b { color: var(--text); font-weight: 500; }
-    .hh .ok { margin-left: auto; color: var(--green); white-space: nowrap; }
-    .hh .no { margin-left: auto; color: var(--action); white-space: nowrap; }
+    .house-l { flex: 1; min-width: 0; }
+    .house .k { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+    .house .v { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+    .house .s { font-size: 11px; color: var(--dim); margin-top: 3px; }
+    .give {
+      border: none; background: var(--action); color: #fff; border-radius: 9px;
+      padding: 9px 13px; font-size: 13px; white-space: nowrap;
+    }
 
     .chart { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 120px; margin-top: 6px; }
     .chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; height: 100%;
@@ -100,6 +105,16 @@
     .meter i.over { background: var(--over); }
     .cat-sub { font-size: 11px; color: var(--dim); margin-top: 6px; }
     .cat-list { margin-top: 8px; }
+    .chev { display: inline-block; margin-left: 6px; color: var(--dim); transition: transform .2s; }
+    .cat.open .chev { transform: rotate(90deg); }
+    .grp { background: var(--surface); border-radius: 9px; padding: 9px 11px 3px; margin-top: 6px; }
+    .grp-head { display: flex; gap: 8px; align-items: baseline; }
+    .grp .gn { font-size: 13.5px; flex: 1; min-width: 0; }
+    .grp .gt { font-size: 13.5px; white-space: nowrap; }
+    .grp .gm { font-size: 11px; color: var(--dim); margin-top: 2px; }
+    .grp .gm.warn { color: var(--action); }
+    .grp .row.mini { padding: 7px 0; border-bottom: 0; border-top: 0.5px solid var(--border); }
+    .grp .row.mini:first-of-type { margin-top: 6px; }
 
     /* Transaction rows (Log It's .row) */
     .row {
@@ -227,7 +242,7 @@
 
   <button class="fab" id="fab" aria-label="Add" hidden>+</button>
 
-  <script src="model.js?v=20261013b"></script>
-  <script src="app.js?v=20261013b"></script>
+  <script src="model.js?v=20261014a"></script>
+  <script src="app.js?v=20261014a"></script>
 </body>
 </html>

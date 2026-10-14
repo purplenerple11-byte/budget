@@ -19,7 +19,8 @@ assert.strictEqual(s.income, 1000);
 assert.strictEqual(s.budget, 485);
 assert.strictEqual(s.left, 410);
 assert.strictEqual(s.unsorted.length, 2);
-assert.strictEqual(s.household.covered, true);
+// house = groceries for the house (60 - 10 refund) + Household entries (none yet)
+assert.deepStrictEqual(s.house, { groceries: 50, logged: 0, total: 50, planned: 35 });
 assert.deepStrictEqual(M.series(data, '2026-09', 3).map(x => x.spent), [0, 30, 75]);
 
 M.applyOp(data, { op: 'categorize', id: 'd', category: 'Groceries', pattern: 'BIG BOX' });
@@ -30,6 +31,21 @@ M.applyOp(data, { op: 'add', entry: { id: 'm-x1', date: '2026-09-07', amount: '1
 assert.strictEqual(M.summarize(data, '2026-09').cats.find(c => c.name === 'Dining').spent, 12.5, 'add is idempotent');
 M.applyOp(data, { op: 'delete', id: 'm-x1' });
 M.applyOp(data, { op: 'budget', category: 'Dining', amount: 75 });
+M.applyOp(data, { op: 'house', id: 'a', personal: true });            // that grocery run was just me
+M.applyOp(data, { op: 'add', entry: { id: 'm-r1', date: '2026-09-01', amount: 300, category: 'Household', type: 'expense', note: 'House: Rent' } });
+s = M.summarize(data, '2026-09');
+assert.deepStrictEqual(s.house, { groceries: 15, logged: 300, total: 315, planned: 35 });  // -10 refund + 20 + 5 sorted BIG BOX
+M.applyOp(data, { op: 'house', id: 'a', personal: false });
+assert.strictEqual(M.isPersonal(data.tx.find(t => t.id === 'a')), false);
+const subs = M.groupCharges([
+  { id: 's1', date: '2026-08-12', description: 'ANTHROPIC* CLAUDE SUB ANTHROPIC.COM CA', amount: 21.4, source: 'Fidelity Visa' },
+  { id: 's2', date: '2026-08-27', description: 'ANTHROPIC* CLAUDE SUB 4152360599 CA', amount: 21.4, source: 'Discover' },
+  { id: 's3', date: '2026-08-03', description: 'Google YouTube 650-2530000 CA', amount: 8.99, source: 'Fidelity Visa' },
+]);
+assert.strictEqual(subs[0].total, 42.8);
+assert.deepStrictEqual(subs[0].cards, ['Fidelity Visa', 'Discover']);   // same sub on two cards → flagged
+assert.strictEqual(subs[0].repeat, true);
+assert.strictEqual(subs[1].repeat, false);
 assert.strictEqual(data.budgets.find(b => b.name === 'Dining').budget, 75);
 
 assert.strictEqual(M.merchant('HANNAFORD #8333 GREENWICH NY'), 'Hannaford Greenwich');

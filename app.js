@@ -22,7 +22,7 @@ const $ = (id) => document.getElementById(id);
 const S = {
   data: null, view: null, tab: 'cats', open: null, editing: null,
   queue: [], opSeq: 0, flushing: false, fetching: false, lastSync: 0, err: '',
-  deferRender: false, sortPattern: {}, sortAlways: {}, delArm: null,
+  deferRender: false, sortPattern: {}, sortAlways: {}, delArm: null, open2: null,
 };
 
 /* ---------------- storage (never throws) ---------------- */
@@ -190,15 +190,11 @@ function render() {
     '<div class="card"><div class="k">Spent</div><div class="v">' + money0(sum.spent) + '</div><div class="s">' +
       (sum.income ? 'earned ' + money0(sum.income) : 'no income logged') + '</div></div></div>';
 
-  const hh = sum.household;
-  if (hh.planned > 0) {
-    const status = hh.paid >= hh.planned ? '<span class="ok">paid ✓</span>'
-      : hh.covered ? '<span class="ok">covered</span>' : '<span class="no">not covered yet</span>';
-    h += '<div class="hh"><span><b>' + esc(hh.label) + '</b> · ' + money0(hh.planned) + '/mo</span>' + status + '</div>';
-  } else {
-    h += '<button class="hh" data-act="hh-set" style="width:100%;border:none;text-align:left">' +
-         '<span>Household contribution isn\'t set</span><span class="no">set it ›</span></button>';
-  }
+  const hs = sum.house;
+  h += '<div class="house"><div class="house-l"><div class="k">Given to the house</div>' +
+       '<div class="v">' + money0(hs.total) + '</div><div class="s">groceries ' + money0(hs.groceries) +
+       ' · rent &amp; extras ' + money0(hs.logged) + (hs.planned ? ' of ' + money0(hs.planned) : '') + '</div></div>' +
+       '<button class="give" data-act="give">+ Gave</button></div>';
 
   // chart: monthly spending, dashed line = total monthly budget
   const max = Math.max(1, sum.budget, ...ser.map(s => s.spent));
@@ -254,17 +250,33 @@ function renderCats(sum) {
       (S.editing === c.name
         ? '<input class="lim-in" inputmode="decimal" enterkeyhint="done" data-cat="' + esc(c.name) + '" value="' + (c.budget || '') + '" aria-label="Monthly limit">'
         : '<button class="lim" data-act="limit" data-cat="' + esc(c.name) + '">' + (c.budget ? money0(c.budget) : 'set') + '</button>');
-    let out = '<div class="cat"><div class="cat-head">' +
-      '<button class="cat-name" data-act="cat-open" data-cat="' + esc(c.name) + '">' + esc(c.name) + '</button>' +
+    const isOpen = S.open === 'cat:' + c.name;
+    let out = '<div class="cat' + (isOpen ? ' open' : '') + '"><div class="cat-head">' +
+      '<button class="cat-name" data-act="cat-open" data-cat="' + esc(c.name) + '">' + esc(c.name) + '<span class="chev">›</span></button>' +
       '<div class="cat-amt"><span class="sp' + (over ? ' over' : '') + '">' + money0(c.spent) + '</span>' +
       (limit ? ' / ' + limit : '') + '</div></div>' +
       '<div class="meter"><i class="' + (over || (c.budget === 0 && c.spent > 0) ? 'over' : '') + '" style="width:' + pct.toFixed(1) + '%"></i></div>' +
       '<div class="cat-sub">' + sub + (n ? ' · ' + n + ' charge' + (n > 1 ? 's' : '') : '') + '</div>';
     if (S.open === 'cat:' + c.name) {
       const list = sum.recent.filter(t => Model.isSpend(t) && (t.category || 'Unsorted') === c.name);
-      out += '<div class="cat-list">' + (list.length ? renderTx(list, true) : '<div class="msg" style="padding:10px">Nothing this month.</div>') + '</div>';
+      out += '<div class="cat-list">' + (list.length ? renderGroups(list) : '<div class="msg" style="padding:10px">Nothing this month.</div>') + '</div>';
     }
     return out + '</div>';
+  }).join('');
+}
+
+// One block per merchant: name, how many charges, which cards, total — then each charge.
+function renderGroups(list) {
+  return Model.groupCharges(list).map(g => {
+    const cards = g.cards.map(c => SHORT[c] || c).join(' + ');
+    const flag = g.cards.length > 1 ? 'on ' + cards : (g.repeat ? g.count + ' charges · ' + cards : cards);
+    return '<div class="grp"><div class="grp-head"><span class="gn">' + esc(g.name) + '</span>' +
+      '<span class="gt">' + money2(g.total) + '</span></div>' +
+      '<div class="gm' + (g.repeat || g.cards.length > 1 ? ' warn' : '') + '">' + esc(flag) + '</div>' +
+      g.items.map(t => '<button class="row mini" data-act="tx" data-id="' + esc(t.id) + '"><span><span class="m" style="margin:0">' +
+        Model.dayLabel(t.date) + ' · ' + esc(SHORT[t.source] || t.source) + '</span></span>' +
+        '<span class="amt' + (t.amount < 0 ? ' ref' : '') + '">' + money2(t.amount) + '</span></button>' +
+        (S.open2 === t.id ? renderDetail(t) : '')).join('') + '</div>';
   }).join('');
 }
 
@@ -296,6 +308,11 @@ function catChips(t, act) {
 
 function renderDetail(t) {
   let out = '<div class="detail"><div class="full">' + esc(t.description) + ' · ' + esc(t.date) + '</div>';
+  if (t.category === 'Groceries') {
+    const mine = Model.isPersonal(t);
+    out += '<div class="chips" style="margin-bottom:10px"><button class="chip" data-act="house" data-id="' + esc(t.id) + '" data-p="0" aria-pressed="' + !mine + '">For the house</button>' +
+           '<button class="chip" data-act="house" data-id="' + esc(t.id) + '" data-p="1" aria-pressed="' + mine + '">Just me</button></div>';
+  }
   if (t.type !== 'income') out += catChips(t, 'setcat');
   if (t.source === 'Manual') {
     out += '<button class="danger" data-act="del" data-id="' + esc(t.id) + '">' +
@@ -350,10 +367,19 @@ $('app').addEventListener('click', (ev) => {
     case 'next': if (S.view < curMonth()) { S.view = Model.shiftMonth(S.view, 1); S.open = null; render(); } break;
     case 'month': S.view = el.dataset.ym; S.open = null; render(); break;
     case 'tab': S.tab = el.dataset.tab; S.open = null; saveUi(); render(); break;
-    case 'cat-open': { const k = 'cat:' + el.dataset.cat; S.open = S.open === k ? null : k; render(); break; }
+    case 'cat-open': { const k = 'cat:' + el.dataset.cat; S.open = S.open === k ? null : k; S.open2 = null; render(); break; }
     case 'limit': S.editing = el.dataset.cat; render(); break;
-    case 'hh-set': S.tab = 'cats'; S.editing = 'Household'; S.scrollToEdit = true; render(); break;
-    case 'tx': S.open = S.open === el.dataset.id ? null : el.dataset.id; render(); break;
+    case 'give': openGive(); break;
+    case 'tx':
+      if (el.closest('.grp')) { S.open2 = S.open2 === el.dataset.id ? null : el.dataset.id; }
+      else S.open = S.open === el.dataset.id ? null : el.dataset.id;
+      render(); break;
+    case 'house': {
+      const personal = el.dataset.p === '1';
+      const t = S.data.tx.filter(x => x.id === el.dataset.id)[0];
+      if (t && Model.isPersonal(t) !== personal) enqueue({ op: 'house', id: t.id, personal });
+      break;
+    }
     case 'setcat': {
       const t = S.data.tx.filter(x => x.id === el.dataset.id)[0];
       if (t && t.category !== el.dataset.cat) enqueue({ op: 'categorize', id: t.id, category: el.dataset.cat, pattern: '' });
@@ -460,6 +486,42 @@ function openAdd() {
   amt.focus({ preventScroll: true });
 }
 
+// Money given to the house that isn't a grocery charge: rent, cash, extras.
+function openGive() {
+  if (!S.data) return;
+  let what = 'Rent';
+  const d = openDialog(
+    '<div class="dlg-t">Gave to the house</div>' +
+    '<div class="big-amt"><span>$</span><input id="g-amt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>' +
+    '<div class="chips" id="g-what">' + ['Rent', 'Groceries (cash)', 'Bills', 'Extra'].map(w =>
+      '<button class="chip" data-w="' + w + '" aria-pressed="' + (w === what) + '">' + w + '</button>').join('') + '</div>' +
+    '<input id="g-note" class="field" placeholder="Note (optional)" autocomplete="off" enterkeyhint="done">' +
+    '<input id="g-date" class="field" type="date" value="' + todayStr() + '" max="' + todayStr() + '">' +
+    '<div class="dlg-row"><button class="dlg-c" id="g-cancel">Cancel</button><button class="dlg-ok" id="g-save" disabled>Save</button></div>');
+  const q = (s) => d.el.querySelector(s);
+  const amt = q('#g-amt');
+  const val = () => { const v = parseFloat(String(amt.value).replace(/[$,\s]/g, '')); q('#g-save').disabled = !(v > 0); return v; };
+  amt.addEventListener('input', val);
+  amt.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); amt.blur(); } });
+  q('#g-what').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-w]'); if (!b) return;
+    what = b.dataset.w;
+    q('#g-what').querySelectorAll('[data-w]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  });
+  q('#g-cancel').addEventListener('click', d.close);
+  q('#g-save').addEventListener('click', () => {
+    const v = val(); if (!(v > 0)) return;
+    const date = q('#g-date').value || todayStr();
+    const note = q('#g-note').value.trim();
+    d.close();
+    S.view = date.slice(0, 7);
+    enqueue({ op: 'add', entry: { id: newId(), type: 'expense', amount: v, category: 'Household', date,
+                                  note: 'House: ' + what + (note ? ' — ' + note : '') } });
+    toast('Gave ' + money2(v) + ' to the house');
+  });
+  amt.focus({ preventScroll: true });
+}
+
 function openImport() {
   let source = lsGet('budget_last_source') || 'Fidelity Visa';
   const d = openDialog(
@@ -552,9 +614,11 @@ function makeDemo() {
     add(m, 28, 'Paycheck', 1400 + m * 50, 'Income', 'Manual', 'income');
   }
   add(0, 5, 'HARDWARE CO ANYTOWN NY', 22.40, '');
+  add(0, 7, 'STREAMCO MONTHLY', 12.99, 'Subscriptions', 'Discover');
+  add(0, 1, 'House: Rent', 300, 'Household', 'Manual');
   add(-1, 21, 'BIG BOX #4403 ANYTOWN NY', 31.18, '');
   return {
-    today: t, householdLabel: 'Phone line',
+    today: t,
     budgets: [['Groceries', 410], ['Shopping', 200], ['Gas & Car', 150], ['Subscriptions', 60], ['Dining', 50],
               ['Household', 35], ['Other', 0]].map(([name, budget]) => ({ name, budget })),
     tx,

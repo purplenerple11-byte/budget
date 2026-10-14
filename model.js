@@ -33,6 +33,7 @@ function dayLabel(date) {
 }
 
 function isSpend(t) { return t.type !== 'income' && t.category !== 'Skip'; }
+function isPersonal(t) { return /(^|\s)personal(\s|$)/.test(t.note || ''); }
 
 // Readable merchant name from a raw card/bank description.
 function merchant(desc) {
@@ -46,6 +47,7 @@ function merchant(desc) {
     .replace(/\.(com|org|net)\b(\/\S*)?/ig, '')
     .replace(/[#*@]\S*/g, ' ')
     .replace(/\S*\d{3,}\S*/g, ' ')
+    .replace(/\S*(?=\S*\d)(?=\S*[a-z])[a-z0-9]{8,}\S*/ig, ' ')
     .replace(/\S+\.\S+/g, ' ')
     .replace(/(^|\s)[A-Za-z](?=\s|$)/g, ' ')
     .replace(/\s+/g, ' ').trim()
@@ -104,8 +106,14 @@ function summarize(data, ym) {
   const cats = names.map(n => ({ name: n, budget: r2(limit[n] || 0), spent: r2(by[n] || 0) }));
   const spent = r2(cats.reduce((s, c) => s + c.spent, 0));
   const budget = r2(cats.reduce((s, c) => s + c.budget, 0));
-  const hh = cats.filter(c => c.name === 'Household')[0] || { budget: 0, spent: 0 };
-  const free = r2(income - (spent - hh.spent));
+  // What Pablo gives the house: groceries (unless a charge is marked "just me")
+  // plus anything logged under Household (rent, extras).
+  const hhBudget = limit.Household || 0;
+  let houseGroceries = 0;
+  (data.tx || []).forEach(t => {
+    if (t.date.slice(0, 7) === ym && isSpend(t) && t.category === 'Groceries' && !isPersonal(t)) houseGroceries += t.amount;
+  });
+  const houseLogged = by.Household || 0;
 
   const byNewest = (a, b) => (b.date + b.id).localeCompare(a.date + a.id);
   recent.sort(byNewest);
@@ -113,12 +121,29 @@ function summarize(data, ym) {
 
   return {
     ym, income: r2(income), spent, budget, left: r2(budget - spent), cats, recent, unsorted,
-    household: {
-      label: data.householdLabel || 'Household',
-      planned: r2(hh.budget), paid: r2(hh.spent), free,
-      covered: hh.budget > 0 && free >= hh.budget,
+    house: {
+      groceries: r2(houseGroceries), logged: r2(houseLogged),
+      total: r2(houseGroceries + houseLogged), planned: r2(hhBudget),
     },
   };
+}
+
+// Charges grouped by merchant (rule-style key), biggest first. A merchant that
+// hits more than once in the month, or on more than one card, is flagged so a
+// doubled subscription stands out.
+function groupCharges(list) {
+  const g = {};
+  list.forEach(t => {
+    const k = suggestPattern(t.description) || t.description;
+    const x = g[k] || (g[k] = { key: k, name: merchant(t.description), total: 0, items: [], cards: {} });
+    x.total += t.amount; x.items.push(t); x.cards[t.source] = true;
+  });
+  return Object.keys(g).map(k => {
+    const x = g[k];
+    const charges = x.items.filter(t => t.amount > 0).length;
+    return { key: k, name: x.name, total: r2(x.total), items: x.items, count: x.items.length,
+             cards: Object.keys(x.cards), repeat: charges > 1 };
+  }).sort((a, b) => b.total - a.total);
 }
 
 // Monthly spending for the chart: n months ending at endYm.
@@ -156,6 +181,13 @@ function applyOp(data, op) {
       if (t.id === op.id) t.category = op.category;
       else if (p && !t.category && t.type !== 'income' && t.description.toUpperCase().indexOf(p) >= 0) t.category = op.category;
     });
+  } else if (op.op === 'house') {
+    tx.forEach(t => {
+      if (t.id !== op.id) return;
+      const toks = String(t.note || '').split(/\s+/).filter(w => w && w !== 'personal');
+      if (op.personal) toks.push('personal');
+      t.note = toks.join(' ');
+    });
   } else if (op.op === 'budget') {
     const b = (data.budgets || (data.budgets = [])).filter(x => x.name === op.category)[0];
     const v = r2(Math.abs(Number(op.amount)) || 0);
@@ -165,5 +197,5 @@ function applyOp(data, op) {
 }
 
 var Model = { r2, shiftMonth, monthLabel, monthShort, dayLabel, merchant, suggestPattern,
-              summarize, series, applyOp, isSpend };
+              summarize, series, applyOp, isSpend, isPersonal, groupCharges };
 if (typeof module !== 'undefined') module.exports = Model;
